@@ -1,0 +1,70 @@
+{
+  "com_port": "AUTO",
+  "com_port_fallback": "COM3",
+  "orientation": "portrait",
+  "brightness": 30,
+  "update_interval": 1.0,
+  "active_page": "metrics",
+  "pages": [
+    "metrics",
+    "weather",
+    "posts"
+  ],
+  "page_cycle_seconds": 0,
+  "hotkeys": {
+    "enabled": true,
+    "next_page": "ctrl+alt+shift+right",
+    "prev_page": "ctrl+alt+shift+left",
+    "toggle_screen": "ctrl+alt+shift+down"
+  },
+  "screen_off_on_exit": true,
+  "reset_on_startup": false,
+  "title": "MY PC",
+  "cpu_label": "CPU",
+  "gpu_label": null,
+  "nvidia_gpu_index": 0,
+  "show_amd_igpu": false,
+  "lhm_url": "http://localhost:8085/data.json",
+  "max_disks": 2,
+  "disks_include": null,
+  "disk_labels": {},
+  "weather": {
+    "city": "Your City",
+    "latitude": 0.0,
+    "longitude": 0.0,
+    "refresh_minutes": 15
+  },
+  "posts": {
+    "title": "TOP STORIES",
+    "count": 6,
+    "refresh_minutes": 15,
+    "provider": "multi_rss",
+    "options": {
+      "feeds": [
+        {
+          "label": "PHARMA",
+          "take": 2,
+          "urls": [
+            "https://news.google.com/rss/search?q=GLP-1%20OR%20semaglutide%20OR%20tirzepatide%20OR%20%22weight%20loss%20drug%22&hl=en-US&gl=US&ceid=US:en"
+          ]
+        },
+        {
+          "label": "WORLD",
+          "take": 2,
+          "urls": [
+            "https://feeds.bbci.co.uk/news/world/rss.xml",
+            "https://news.google.com/rss/search?q=world%20news&hl=en-US&gl=US&ceid=US:en"
+          ]
+        },
+        {
+          "label": "TECH / AI",
+          "take": 2,
+          "urls": [
+            "https://www.theverge.com/rss/index.xml",
+            "https://news.google.com/rss/search?q=AI%20OR%20OpenAI%20OR%20Anthropic%20OR%20Nvidia%20chips&hl=en-US&gl=US&ceid=US:en"
+          ]
+        }
+      ]
+    }
+  }
+}

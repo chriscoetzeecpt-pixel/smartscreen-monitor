@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# App runtime
+logs/
+*.log
+previews/*.png
+
+# OS
+.DS_Store
+Thumbs.db
+
+# personal config (use config.example.json as a template)
+config.json

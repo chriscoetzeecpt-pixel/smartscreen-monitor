@@ -1,0 +1,10 @@
+# All of these have Python 3.14 Windows x64 wheels (checked 19 Nov 2026 on PyPI):
+#   pillow 13.0.0 (cp314), psutil 7.2.2 (abi3), pyserial 3.5 / nvidia-ml-py / keyboard (pure Python)
+pillow>=11.3
+psutil>=7.0
+pyserial>=3.5
+nvidia-ml-py>=12.535
+# Optional: global hotkeys for page switching. Remove this line if you don't want hotkeys.
+keyboard>=0.13.5
+# Optional speed-up for RGB565 conversion; the app works without it. cp314 wheels exist.
+numpy>=2.3
