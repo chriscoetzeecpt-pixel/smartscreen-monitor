@@ -66,5 +66,15 @@
         }
       ]
     }
-  }
+  },
+  "log_level": "INFO",
+  "status_log_minutes": 30,
+  "serial_write_timeout": 5.0,
+  "reset_on_desync": true,
+  "reconnect_backoff_max_seconds": 60,
+  "max_consecutive_errors": 0,
+  "full_redraw_seconds": 300,
+  "watchdog_seconds": 60,
+  "network_timeout_seconds": 10,
+  "supervisor": true
 }

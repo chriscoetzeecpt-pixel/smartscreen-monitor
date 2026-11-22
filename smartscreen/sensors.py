@@ -162,7 +162,7 @@ class LhmSource:
             return None
         try:
             with urllib.request.urlopen(self.url, timeout=self.timeout) as r:
-                tree = json.loads(r.read().decode("utf-8", errors="replace"))
+                tree = json.loads(r.read(5_000_000).decode("utf-8", errors="replace"))
             return extract_lhm(tree)
         except Exception as e:
             now = time.monotonic()

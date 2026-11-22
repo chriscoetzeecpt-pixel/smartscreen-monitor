@@ -14,8 +14,11 @@ $main = Join-Path $root "main.py"
 $action   = New-ScheduledTaskAction -Execute $pyw -Argument "`"$main`"" -WorkingDirectory $root
 $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $trigger.Delay = "PT20S"   # give USB and LibreHardwareMonitor a moment after logon
+# main.py already restarts its own worker process after a crash, hang (watchdog) or repeated
+# serial errors. The Task Scheduler restart below is only a backstop in case the supervising
+# process itself dies, so allow plenty of restarts instead of the old limit of 3.
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-            -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
+            -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
             -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
 

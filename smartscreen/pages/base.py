@@ -1,8 +1,10 @@
 """Page interface.
 
 A page is asked to:
-  * update()  - refresh its data. Called on the main loop at most every `data_interval`
-                seconds. May be slow (network); errors are caught and logged by the caller.
+  * update()  - refresh its data. Called from the page's own background worker thread at
+                most every `data_interval` seconds, never from the render loop, so it may be
+                slow (network). Errors are caught and logged by the caller. Replace data
+                attributes in one assignment so render() never sees a half-updated state.
   * render(w, h) - return a full-screen PIL image. Must be fast and must not do I/O.
 The app diffs each rendered frame against the last one sent and only transmits the
 changed regions, so pages can simply redraw everything every tick.

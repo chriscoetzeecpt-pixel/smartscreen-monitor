@@ -10,7 +10,8 @@ Protocol details follow the open-source project mathoudebine/turing-smart-screen
   * DISPLAY_BITMAP is followed by raw RGB565 little-endian pixels, row-major,
     for the inclusive rectangle (x, y) - (ex, ey).
   * There is NO firmware-write command in this protocol. Nothing in this file can
-    reflash or brick the device; a garbled image is fixed by replugging the USB cable.
+    reflash or brick the device. A garbled image means the device lost step with the byte
+    stream; the app recovers by sending RESET (see LcdRevA.reset_device), or replug the USB cable.
 
 Two display back-ends share the same interface:
   * LcdRevA        - the real screen over a serial port.
@@ -189,38 +190,78 @@ class _DisplayBase:
 class LcdRevA(_DisplayBase):
     """Real hardware over serial."""
 
-    def __init__(self, port: str, orientation: Orientation, reset_on_startup: bool = False):
+    def __init__(self, port: str, orientation: Orientation, reset_on_startup: bool = False,
+                 write_timeout: float = 5.0):
         super().__init__(orientation)
         self.port = port
         self.reset_on_startup = reset_on_startup
+        self.write_timeout = float(write_timeout)
         self.ser = None
         self.bytes_sent = 0
+        # False once a write failed part-way. The device firmware then still expects the rest of
+        # a bitmap and will treat the next commands as pixel data (garbled screen). Only a device
+        # RESET reliably brings it back in step; closing and reopening the port does not.
+        self.in_sync = True
 
     def open(self):
         import serial
         log.info("Opening %s at 115200 baud (rtscts)", self.port)
         # write_timeout stops us hanging forever if the device stalls flow control.
-        self.ser = serial.Serial(self.port, 115200, timeout=1, write_timeout=5, rtscts=True)
+        self.ser = serial.Serial(self.port, 115200, timeout=1, write_timeout=self.write_timeout,
+                                 rtscts=True)
         if self.reset_on_startup:
             # Not recommended: the device re-enumerates and may come back on another COM port.
             log.warning("Sending RESET, the COM port may disappear and change number")
             self._write(pack_header(0, 0, 0, 0, Command.RESET))
             time.sleep(5)
+        self.in_sync = True
         self.hello()
         self.screen_on()
         self.set_orientation(self.orientation)
 
     def close(self):
+        """Close the port. Never raises: a dead USB handle must not stop a reconnect."""
         if self.ser is not None:
             try:
                 self.ser.close()
+            except Exception as e:
+                log.debug("Error closing %s: %s", self.port, e)
             finally:
                 self.ser = None
 
+    def reset_device(self, wait: float = 5.0):
+        """Send RESET to bring the firmware back to a known state, then close the port.
+        The device re-enumerates on USB and may come back on a different COM port, so the
+        caller must look the port up again before reopening. Never raises."""
+        try:
+            if self.ser is None:
+                import serial
+                self.ser = serial.Serial(self.port, 115200, timeout=1,
+                                         write_timeout=self.write_timeout, rtscts=False)
+            log.warning("Sending RESET to resync the screen (port may change number)")
+            self.ser.write(pack_header(0, 0, 0, 0, Command.RESET))
+            try:
+                self.ser.flush()
+            except Exception:
+                pass
+        except Exception as e:
+            log.warning("RESET could not be sent on %s: %s", self.port, e)
+        finally:
+            self.close()
+        time.sleep(wait)
+
     def _write(self, data: bytes):
+        import serial
         if self.ser is None:
-            raise RuntimeError("Serial port is not open")
-        self.ser.write(data)
+            raise serial.SerialException("Serial port is not open")
+        try:
+            n = self.ser.write(data)
+        except Exception:
+            self.in_sync = False
+            raise
+        if n is not None and n != len(data):
+            self.in_sync = False
+            raise serial.SerialTimeoutException(f"Partial write: {n} of {len(data)} bytes")
         self.bytes_sent += len(data)
 
     def hello(self):

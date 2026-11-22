@@ -69,6 +69,7 @@ class WeatherPage(Page):
         self.city = wc.get("city", "Your City")
         self.lat, self.lon = wc.get("latitude"), wc.get("longitude")
         self.data_interval = float(wc.get("refresh_minutes", 15)) * 60
+        W.TIMEOUT = float(cfg.get("network_timeout_seconds", 10))
         self.dummy = dummy
         self.w: W.Weather | None = W.DUMMY if dummy else None
         self.error = None

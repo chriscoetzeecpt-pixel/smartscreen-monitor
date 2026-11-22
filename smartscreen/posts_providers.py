@@ -27,6 +27,9 @@ from email.utils import parsedate_to_datetime
 
 log = logging.getLogger(__name__)
 
+TIMEOUT = 10.0             # seconds, set from config "network_timeout_seconds"
+MAX_BYTES = 5_000_000      # never read more than this from one feed
+
 
 @dataclass
 class Post:
@@ -44,8 +47,8 @@ def _rss(limit, options):
     if not url:
         raise ValueError("posts.options.url is required for the rss provider")
     req = urllib.request.Request(url, headers={"User-Agent": "smartscreen-local/0.1"})
-    with urllib.request.urlopen(req, timeout=10) as r:
-        root = ET.fromstring(r.read())
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        root = ET.fromstring(r.read(MAX_BYTES))
     ns = {"a": "http://www.w3.org/2005/Atom"}
     posts = []
     for item in root.iter("item"):                      # RSS 2.0
@@ -75,8 +78,8 @@ def _parse_dt(s):
 def _fetch_feed(url, label=""):
     """Return list of (Post, datetime|None) for one RSS/Atom feed."""
     req = urllib.request.Request(url, headers={"User-Agent": "smartscreen-local/0.1"})
-    with urllib.request.urlopen(req, timeout=10) as r:
-        root = ET.fromstring(r.read())
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        root = ET.fromstring(r.read(MAX_BYTES))
     ns = {"a": "http://www.w3.org/2005/Atom"}
     out = []
     for item in root.iter("item"):                          # RSS 2.0

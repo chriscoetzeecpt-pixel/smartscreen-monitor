@@ -11,6 +11,8 @@ log = logging.getLogger(__name__)
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
+TIMEOUT = 10.0             # seconds, set from config "network_timeout_seconds"
+MAX_BYTES = 2_000_000      # never read more than this from one response
 
 # WMO weather interpretation codes -> (short text, icon kind)
 WMO = {
@@ -48,11 +50,11 @@ class Weather:
     fetched_at: str  # local HH:MM
 
 
-def _get(url: str, params: dict, timeout=10) -> dict:
+def _get(url: str, params: dict, timeout=None) -> dict:
     q = url + "?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(q, headers={"User-Agent": "smartscreen-local/0.1"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode("utf-8"))
+    with urllib.request.urlopen(req, timeout=timeout or TIMEOUT) as r:
+        return json.loads(r.read(MAX_BYTES).decode("utf-8"))
 
 
 def geocode(city: str) -> tuple[float, float, str] | None:

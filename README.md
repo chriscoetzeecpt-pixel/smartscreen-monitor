@@ -54,7 +54,17 @@ optional. Delete it from `requirements.txt` and the app simply runs without hotk
 .\.venv\Scripts\python.exe main.py --page weather    # start on another page
 ```
 
-Logs go to `logs\smartscreen.log` (rotating, about 1 MB max).
+Logs go to the `logs` folder next to `main.py` (rotating, 1 MB per file, 5 old files kept):
+
+* `logs\smartscreen.log` - the screen driver: serial errors, reconnects, page fetch failures,
+  uncaught exceptions from every thread, and a status line every 30 minutes (frames sent, memory,
+  thread count) so slow leaks show up.
+* `logs\supervisor.log` - worker starts and restarts with their exit codes.
+* `logs\faulthandler.log` - only written if the Python interpreter itself crashes.
+
+`python main.py` runs a small supervisor that starts the screen driver as a child process and
+restarts it if it exits with an error. Use `--no-supervisor` to run everything in one process, which
+is handy when debugging in a console.
 
 If the test pattern shows the right colours but the wrong way round, change `orientation` in
 `config.json` (`portrait`, `reverse_portrait`, `landscape`, `reverse_landscape`).
@@ -79,6 +89,19 @@ If the test pattern shows the right colours but the wrong way round, change `ori
 | `disks_include` | `null` | Limit to e.g. `["PhysicalDrive0", "PhysicalDrive1"]` |
 | `weather.city / latitude / longitude` | Your City, 0.0, 0.0 | Set latitude/longitude to `null` to look the city up by name |
 | `posts.*` | static placeholder | See "Posts page" below |
+| `log_level` | `INFO` | `DEBUG`, `INFO` or `WARNING`. `-v` forces `DEBUG` |
+| `status_log_minutes` | `30` | Status line in the log every N minutes, 0 = off |
+| `serial_write_timeout` | `5.0` | Seconds before a stalled serial write counts as an error |
+| `reset_on_desync` | `true` | RESET the screen after a write failed part-way, then redraw. This is what clears a garbled screen |
+| `reconnect_backoff_max_seconds` | `60` | Reconnect waits 2, 4, 8 ... seconds, up to this |
+| `max_consecutive_errors` | `0` | Exit (so the supervisor starts a fresh process) after this many failed reconnects in a row, 0 = keep trying |
+| `full_redraw_seconds` | `300` | Resend the whole screen this often so any artifacts heal by themselves, 0 = off |
+| `watchdog_seconds` | `60` | Exit with code 3 if no frame completes for this long (a hang). The supervisor restarts it. 0 = off |
+| `network_timeout_seconds` | `10` | HTTP timeout for weather and RSS |
+| `supervisor` | `true` | `python main.py` restarts the screen driver after a crash or hang |
+
+All keys are optional. An older `config.json` without the newer keys simply gets the defaults above,
+so you never need to recreate your config after an update.
 
 Disk names are read once at start-up from `Win32_DiskDrive` (no admin) and matched to psutil's
 `PhysicalDriveN` counters, so model names like "Samsung 1TB" appear automatically. Throughput is in
@@ -131,13 +154,35 @@ powershell -ExecutionPolicy Bypass -File scripts\uninstall_autostart.ps1   # rem
 ```
 
 This creates one normal-privilege task, **"SmartScreen (local)"**, in the Task Scheduler Library. It runs
-`.venv\Scripts\pythonw.exe main.py` (no console window) 20 s after you log on, restarts up to 3 times if it
-crashes, and is visible and removable like any other task. Stop it from Task Scheduler (End) or Task
+`.venv\Scripts\pythonw.exe main.py` (no console window) 20 s after you log on, and is visible and
+removable like any other task. Restarts are handled in two layers: `main.py` restarts its screen
+driver after a crash, a hang caught by the watchdog, or repeated serial errors, and Task Scheduler
+restarts the whole thing (every minute, up to 999 times) if the supervising process itself dies.
+Re-run `install_autostart.ps1` after updating to pick up the higher restart count. Stop it from Task Scheduler (End) or Task
 Manager (`pythonw.exe`). When stopped that way, the screen keeps showing the last frame until the app starts
 again or the USB is replugged.
 
 Simpler alternative: a shortcut in `shell:startup` with target
 `C:\Tools\smartscreen\.venv\Scripts\pythonw.exe C:\Tools\smartscreen\main.py` and "Start in" set to the folder.
+
+### Frozen or garbled screen
+
+The screen has no way to report what it shows, so the app protects itself instead:
+
+* Page data (sensors, weather, RSS) is fetched on background threads. A slow network or a stuck
+  driver call can no longer stall drawing.
+* If a serial write times out or only partly goes through, the device is left waiting for the rest
+  of an image and would draw every later byte as pixels (the garbled look). The app then RESETs the
+  screen, reopens the port (with backoff), runs the start-up handshake again and redraws the whole
+  frame.
+* The whole screen is also resent every `full_redraw_seconds`, so a missed partial update cannot
+  stay on screen for long.
+* If no frame completes for `watchdog_seconds`, the driver logs every thread's stack and exits with
+  code 3. The supervisor starts a fresh one.
+
+If it still freezes, check `logs\smartscreen.log` around the time it stopped changing. Lines like
+`Serial error ... Write timeout` point at the USB link (try another port or cable, and turn off USB
+selective suspend in the Windows power plan), and `Watchdog:` lines show where it was stuck.
 
 ## 7. Posts page (pluggable)
 
@@ -162,6 +207,7 @@ everything each tick.
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_protocol.py            # header/RGB565/orientation/LHM parsing checks
+.\.venv\Scripts\python.exe -m pytest tests                    # all checks, incl. reconnect/watchdog with a mocked port (pip install pytest)
 .\.venv\Scripts\python.exe main.py --simulate --both-orientations [--live-weather] [--live-sensors]
 ```
 
@@ -176,13 +222,15 @@ main.py                     CLI entry point
 config.json                 your settings
 smartscreen/lcd_rev_a.py    serial protocol + simulated display
 smartscreen/sensors.py      psutil, NVML, LibreHardwareMonitor
-smartscreen/app.py          main loop, diffing, hotkeys, USB reconnect
+smartscreen/app.py          main loop, diffing, hotkeys, USB reconnect, watchdog
 smartscreen/render.py       theme, fonts, drawing helpers
 smartscreen/pages/          metrics, weather, posts
 smartscreen/weather_api.py  Open-Meteo client
 smartscreen/posts_providers.py
 fonts/                      Barlow (SIL Open Font License, see OFL-Barlow.txt)
 scripts/                    autostart and LHM task scripts
-tests/test_protocol.py
+tests/test_protocol.py      protocol and parsing checks
+tests/test_reliability.py   reconnect, redraw, watchdog and config checks (mocked serial)
+logs/                       runtime logs (not in git)
 previews/                   simulated renders
 ```

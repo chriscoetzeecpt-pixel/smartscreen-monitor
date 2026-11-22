@@ -26,6 +26,7 @@ class PostsPage(Page):
         self.limit = int(pc.get("count", 5))
         self.title = pc.get("title", "TOP POSTS")
         self.data_interval = float(pc.get("refresh_minutes", 10)) * 60
+        P.TIMEOUT = float(cfg.get("network_timeout_seconds", 10))
         self.posts: list[P.Post] = []
         self.error = None
 

@@ -31,6 +31,27 @@ DEFAULTS = {
                 "refresh_minutes": 15},
     "posts": {"title": "TOP POSTS", "count": 5, "refresh_minutes": 10, "provider": "static",
               "options": {"items": []}},
+    # --- reliability (all optional; an older config.json without them gets these values) ---
+    "log_level": "INFO",              # DEBUG, INFO, WARNING. -v on the command line forces DEBUG
+    "status_log_minutes": 30,         # status line (frames, memory, threads) in the log; 0 = off
+    "serial_write_timeout": 5.0,      # seconds before a stalled serial write is treated as an error
+    "reset_on_desync": True,          # RESET the screen after a write failed part-way (fixes garbling)
+    "reconnect_backoff_max_seconds": 60,  # reconnect waits 2, 4, 8 ... s up to this
+    "max_consecutive_errors": 0,      # exit after this many failed reconnects in a row; 0 = keep trying
+    "full_redraw_seconds": 300,       # resend the whole screen this often so artifacts self-heal; 0 = off
+    "watchdog_seconds": 60,           # exit (code 3) if no frame completes for this long; 0 = off
+    "network_timeout_seconds": 10,    # weather / RSS HTTP timeout
+    "supervisor": True,               # main.py restarts the worker process if it exits with an error
+}
+
+_NUMERIC = {  # key: (minimum, maximum)
+    "status_log_minutes": (0, 1440),
+    "serial_write_timeout": (0.5, 60),
+    "reconnect_backoff_max_seconds": (2, 3600),
+    "max_consecutive_errors": (0, 100000),
+    "full_redraw_seconds": (0, 86400),
+    "watchdog_seconds": (0, 86400),
+    "network_timeout_seconds": (1, 120),
 }
 
 
@@ -53,4 +74,13 @@ def load(path: Path) -> dict:
     cfg = _merge(DEFAULTS, user)
     cfg["brightness"] = max(0, min(100, float(cfg["brightness"])))
     cfg["update_interval"] = max(0.25, float(cfg["update_interval"]))
+    for key, (lo, hi) in _NUMERIC.items():
+        try:
+            cfg[key] = max(lo, min(hi, float(cfg[key])))
+        except (TypeError, ValueError):
+            cfg[key] = DEFAULTS[key]
+    # a watchdog shorter than a few frames would kill a healthy app
+    if cfg["watchdog_seconds"] and cfg["watchdog_seconds"] < 10 * cfg["update_interval"]:
+        cfg["watchdog_seconds"] = max(15.0, 10 * cfg["update_interval"])
+    cfg["max_consecutive_errors"] = int(cfg["max_consecutive_errors"])
     return cfg
